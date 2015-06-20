@@ -1,5 +1,5 @@
-#ifndef THREAD_POOL_H
-#define THREAD_POOL_H
+#ifndef __THREAD_POOL_H__
+#define __THREAD_POOL_H__
 
 #include <vector>
 #include <queue>
@@ -11,9 +11,11 @@
 #include <functional>
 #include <stdexcept>
 
-class ThreadPool {
+namespace ThreadPool {
+
+class FixedThreadPool {
  public:
-  ThreadPool(size_t);
+  FixedThreadPool(size_t);
   
   template<class F, class... Args>
   auto Submit(F&& f, Args&&... args)
@@ -22,8 +24,10 @@ class ThreadPool {
   template<class F, class... Args>
   void Execute(F&& f, Args&&... args);
 
-  ~ThreadPool();
+  ~FixedThreadPool();
   
+  void AwaitTermination();
+
   void Stop();
 
  private:
@@ -47,14 +51,20 @@ class ThreadPool {
 };
 
 // the constructor just launches some amount of workers
-ThreadPool::ThreadPool(size_t num_threads)
-    : stop_(false), thread_size_(num_threads) {
-  // for(size_t i = 0;i < num_threads; ++i) {
-  //   workers.emplace_back(std::thread(&ThreadPool::ThreadWorker, this));
-  // }
+FixedThreadPool::FixedThreadPool(size_t num_threads): 
+    stop_(false),
+    thread_size_(num_threads) {}
+
+// the destructor joins all threads
+FixedThreadPool::~FixedThreadPool() {
+  for(std::thread &worker: workers) {
+    if (worker.joinable()) {
+      worker.join();
+    }
+  }
 }
 
-void ThreadPool::ThreadWorker() {
+void FixedThreadPool::ThreadWorker() {
   std::function<void()> task;
   while (1) {
     {
@@ -73,11 +83,11 @@ void ThreadPool::ThreadWorker() {
 
 // add new work item to the pool
 template<class F, class... Args>
-auto ThreadPool::Submit(F&& f, Args&&... args)
+auto FixedThreadPool::Submit(F&& f, Args&&... args)
     -> std::future<typename std::result_of<F(Args...)>::type >
 {  
   if (workers.size() < thread_size_) {
-    workers.emplace_back(std::thread(&ThreadPool::ThreadWorker, this));
+    workers.emplace_back(std::thread(&FixedThreadPool::ThreadWorker, this));
   }
 
   using return_type = typename std::result_of<F(Args...)>::type;
@@ -100,25 +110,27 @@ auto ThreadPool::Submit(F&& f, Args&&... args)
 
 // execute new task without returning std::future object.
 template<class F, class... Args>
-void ThreadPool::Execute(F&& f, Args&&... args) {
+void FixedThreadPool::Execute(F&& f, Args&&... args) {
   Submit(std::forward<F>(f), std::forward<Args>(args)...);
 }
 
-// the destructor joins all threads
-ThreadPool::~ThreadPool() {
-  {
-    std::unique_lock<std::mutex> lock(queue_mutex);
-    stop_ = true;
-  }
-  condition.notify_all();
+// blocks and wait for all previously submitted tasks to be completed.
+void FixedThreadPool::AwaitTermination() {
   for(std::thread &worker: workers) {
-    worker.join();
+    if (worker.joinable()) {
+      worker.join();
+    }
   }
 }
 
-void ThreadPool::Stop() {
+// Shut down the threadpool. This method does not wait for previously submitted
+// tasks to be completed.
+void FixedThreadPool::Stop() {
   std::unique_lock<std::mutex> lock(queue_mutex);
   stop_ = true;
 }
 
-#endif
+
+} // namespace ThreadPool
+
+#endif /* __THREAD_POOL_H__ */
