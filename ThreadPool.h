@@ -40,6 +40,7 @@ class FixedThreadPool {
   std::queue< std::function<void()> > tasks;
   
   // synchronization
+  std::mutex worker_mutex;
   std::mutex queue_mutex;
   std::condition_variable condition;
   
@@ -50,12 +51,12 @@ class FixedThreadPool {
   int thread_size_;
 };
 
-// the constructor just launches some amount of workers
+// Constructor does nothing. Threads are created when new task submitted.
 FixedThreadPool::FixedThreadPool(size_t num_threads): 
     stop_(false),
     thread_size_(num_threads) {}
 
-// the destructor joins all threads
+// Destructor joins all threads
 FixedThreadPool::~FixedThreadPool() {
   for(std::thread &worker: workers) {
     if (worker.joinable()) {
@@ -64,6 +65,7 @@ FixedThreadPool::~FixedThreadPool() {
   }
 }
 
+// Thread worker
 void FixedThreadPool::ThreadWorker() {
   std::function<void()> task;
   while (1) {
@@ -81,13 +83,16 @@ void FixedThreadPool::ThreadWorker() {
   }
 }
 
-// add new work item to the pool
+// Add new work item to the pool
 template<class F, class... Args>
 auto FixedThreadPool::Submit(F&& f, Args&&... args)
     -> std::future<typename std::result_of<F(Args...)>::type >
-{  
-  if (workers.size() < thread_size_) {
-    workers.emplace_back(std::thread(&FixedThreadPool::ThreadWorker, this));
+{
+  {
+    std::unique_lock<std::mutex> lock(this->worker_mutex);
+    if (workers.size() < thread_size_) {
+      workers.emplace_back(std::thread(&FixedThreadPool::ThreadWorker, this));
+    }
   }
 
   using return_type = typename std::result_of<F(Args...)>::type;
@@ -102,19 +107,19 @@ auto FixedThreadPool::Submit(F&& f, Args&&... args)
     if(stop_) {
       throw std::runtime_error("enqueue on stopped ThreadPool");
     }
-    tasks.emplace([task](){ (*task)(); });
+    tasks.emplace([task]() { (*task)(); });
   }
   condition.notify_one();
   return res;
 }
 
-// execute new task without returning std::future object.
+// Execute new task without returning std::future object.
 template<class F, class... Args>
 void FixedThreadPool::Execute(F&& f, Args&&... args) {
   Submit(std::forward<F>(f), std::forward<Args>(args)...);
 }
 
-// blocks and wait for all previously submitted tasks to be completed.
+// Blocks and wait for all previously submitted tasks to be completed.
 void FixedThreadPool::AwaitTermination() {
   for(std::thread &worker: workers) {
     if (worker.joinable()) {
@@ -126,8 +131,12 @@ void FixedThreadPool::AwaitTermination() {
 // Shut down the threadpool. This method does not wait for previously submitted
 // tasks to be completed.
 void FixedThreadPool::Stop() {
-  std::unique_lock<std::mutex> lock(queue_mutex);
-  stop_ = true;
+  printf("Stopping ...\n");
+  {
+    std::unique_lock<std::mutex> lock(queue_mutex);
+    stop_ = true;
+  }
+  condition.notify_all();
 }
 
 
