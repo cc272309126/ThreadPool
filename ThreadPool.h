@@ -1,5 +1,5 @@
-#ifndef __THREAD_POOL_H__
-#define __THREAD_POOL_H__
+#ifndef THREAD_POOL_H_
+#define THREAD_POOL_H_
 
 #include <vector>
 #include <queue>
@@ -142,4 +142,4 @@ void FixedThreadPool::Stop() {
 
 } // namespace ThreadPool
 
-#endif /* __THREAD_POOL_H__ */
+#endif /* THREAD_POOL_H_ */
