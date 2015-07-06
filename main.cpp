@@ -86,7 +86,7 @@ class B : public SomeServiceInterface {
 class Stubby {
  public:
   Stubby() = default;
-  void RegisterRPC(std::string name, RPCBase* rpcserver) {
+  void rebind(std::string name, RPCBase* rpcserver) {
     map_[name] = rpcserver;
   }
   RPCBase* lookup(std::string name) {
@@ -105,7 +105,7 @@ void testCallback() {
   // Mock RPC Service.
   B server;
   Stubby stub;
-  stub.RegisterRPC("Bserver", &server);
+  stub.rebind("Bserver", &server);
   // client get RPC service from stub
   A a;
   SomeServiceInterface* service = (SomeServiceInterface*)stub.lookup("Bserver");
