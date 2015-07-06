@@ -3,7 +3,7 @@ LFLAG=-pthread
 
 default: test
 
-test: main.cpp ThreadPool.h
+test: main.cpp ThreadPool.h Callback.h
 	$(CC) main.cpp -o test $(LFLAG)
 
 clean:
