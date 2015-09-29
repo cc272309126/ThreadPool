@@ -15,9 +15,9 @@ class Stubby;
 void testThreadpool();
 void testCallback();
 
-int func() {
+int func(int a) {
   std::this_thread::sleep_for(std::chrono::seconds(1));
-  printf("a = %d\n", 1000);
+  printf("a = %d\n", a);
   //throw std::exception();
   return 0;
 }
@@ -26,7 +26,7 @@ void testThreadpool() {
   ThreadPool::FixedThreadPool pool(4);
   std::vector< std::future<int> > results;
 
-  auto res = pool.Submit(func);
+  auto res = pool.Submit(func, 3);
   //res.get(); // will get the exception
   for(int i = 0; i < 8; ++i) {
     results.emplace_back(
@@ -96,11 +96,28 @@ class Stubby {
   std::map<std::string, RPCBase*> map_;
 };
 
+int AddIntegers(int a, int b) {
+  return a + b;
+}
+
+void PrintIntegers(int a, int b) {
+  std::cout << "arg1 = " << a << ", arg2 = " << b << std::endl;
+}
+
 void testCallback() {
   // Local test.
-  ThreadPool::CallBack* callback1 = new ThreadPool::CallBack(&func);
-  callback1->Run();
+  ThreadPool::CallBack1<int>* callback1 = new ThreadPool::CallBack1<int>(&func);
+  callback1->Run(5);
   delete callback1;
+
+  ThreadPool::ResultCallBack1<int, int>* callback2 =
+      new ThreadPool::CreateCallback(AddIntegers, 1);
+  int c = callback2->Run(2);
+  std::cout << c << std::endl;
+
+  ThreadPool::ResultCallBack1<void, int>* callback3 =
+      new ThreadPool::CreateCallback(PrintIntegers, 1);
+  callback3->Run(2);
 
   // Mock RPC Service.
   B server;
