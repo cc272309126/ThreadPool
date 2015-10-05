@@ -17,7 +17,19 @@ namespace Executors {
 
 class FixedThreadPool {
  public:
+  enum State {
+    IDLE,
+    RUNNING,
+    STOP,
+  };
+
+  FixedThreadPool();
   FixedThreadPool(size_t);
+  FixedThreadPool(const FixedThreadPool&) = delete;
+  FixedThreadPool& operator=(const FixedThreadPool&) = delete;
+
+  void SetPoolSize(size_t);
+  size_t Size() const;
 
   void AddTask(Base::Closure* task);
 
@@ -25,6 +37,7 @@ class FixedThreadPool {
   
   void AwaitTermination();
 
+  void Start();
   void Stop();
 
  private:
@@ -42,7 +55,7 @@ class FixedThreadPool {
   std::condition_variable condition;
   
   // stop flag
-  bool stop_;
+  State state_;
 
   // thread size
   unsigned int thread_size_;

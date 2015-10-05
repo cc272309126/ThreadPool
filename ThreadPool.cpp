@@ -1,22 +1,27 @@
 #include <iostream>
-#include <vector>
-#include <queue>
-#include <memory>
-#include <thread>
-#include <mutex>
-#include <condition_variable>
-#include <future>
-#include <functional>
-#include <stdexcept>
 
 #include "ThreadPool.h"
 
 namespace Executors {
 
+FixedThreadPool::FixedThreadPool(): 
+    state_(IDLE),
+    thread_size_(4) {
+}
+
 // Constructor does nothing. Threads are created when new task submitted.
-FixedThreadPool::FixedThreadPool(size_t num_threads): 
-    stop_(false),
-    thread_size_(num_threads) {}
+FixedThreadPool::FixedThreadPool(size_t num_threads):
+    state_(IDLE),
+    thread_size_(num_threads) {
+}
+
+void FixedThreadPool::SetPoolSize(size_t size) {
+  thread_size_ = size;
+}
+
+size_t FixedThreadPool::Size() const {
+  return thread_size_;
+}
 
 // Destructor joins all threads
 FixedThreadPool::~FixedThreadPool() {
@@ -27,19 +32,32 @@ FixedThreadPool::~FixedThreadPool() {
   }
 }
 
+void FixedThreadPool::Start() {
+  {
+    std::unique_lock<std::mutex> lock(queue_mutex);
+    state_ = RUNNING;
+    unsigned int num_working_threads_ =
+        thread_size_ < tasks.size()? thread_size_ : tasks.size();
+    for (unsigned int i = workers.size(); i < num_working_threads_; i++) {
+      workers.emplace_back(std::thread(&FixedThreadPool::ThreadWorker, this));
+    }
+  }
+  condition.notify_all();
+}
+
 // Thread worker
 void FixedThreadPool::ThreadWorker() {
   Base::Closure* task;
   while (1) {
     {
-      std::unique_lock<std::mutex> lock(this->queue_mutex);
-      this->condition.wait(lock,
-                     [this] { return this->stop_ || !this->tasks.empty(); });
-      if (this->stop_ && this->tasks.empty()) {
+      std::unique_lock<std::mutex> lock(queue_mutex);
+      condition.wait(lock,
+                     [this] { return state_ == STOP || !tasks.empty(); });
+      if (state_ == STOP && tasks.empty()) {
         return;
       }
-      task = (this->tasks.front()).release();
-      this->tasks.pop();
+      task = (tasks.front()).release();
+      tasks.pop();
     }
     task->Run();
   }
@@ -48,15 +66,15 @@ void FixedThreadPool::ThreadWorker() {
 // Add new work item to the pool
 void FixedThreadPool::AddTask(Base::Closure* task) {
   {
-    std::unique_lock<std::mutex> lock(this->worker_mutex);
-    if (workers.size() < thread_size_) {
+    std::unique_lock<std::mutex> lock(worker_mutex);
+    if (state_ == RUNNING && workers.size() < thread_size_) {
       workers.emplace_back(std::thread(&FixedThreadPool::ThreadWorker, this));
     }
   }
 
   {
     std::unique_lock<std::mutex> lock(queue_mutex);
-    if(stop_) {
+    if (state_ == STOP) {
       throw std::runtime_error("enqueue on stopped ThreadPool");
     }
     tasks.emplace(std::unique_ptr<Base::Closure>(task));
@@ -66,6 +84,7 @@ void FixedThreadPool::AddTask(Base::Closure* task) {
 
 // Blocks and wait for all previously submitted tasks to be completed.
 void FixedThreadPool::AwaitTermination() {
+  condition.notify_all();
   for(std::thread &worker: workers) {
     if (worker.joinable()) {
       worker.join();
@@ -78,7 +97,7 @@ void FixedThreadPool::AwaitTermination() {
 void FixedThreadPool::Stop() {
   {
     std::unique_lock<std::mutex> lock(queue_mutex);
-    stop_ = true;
+    state_ = STOP;
   }
   condition.notify_all();
 }
