@@ -59,7 +59,8 @@ void SimpleServer::ReadRequestHandler(int fd) {
   TestMessage* message = messages_map_[fd];
 
   // Create a buffered data reader on the socket.
-  std::unique_ptr<IO::FileDescriptorInterface> client_socket(new Network::Socket(fd));
+  std::unique_ptr<IO::FileDescriptorInterface> client_socket(
+      new Network::Socket(fd, false));
   Utility::BufferedDataReader br(std::move(client_socket));
 
   // Try to parse header line "size = value\n" to get data length;
@@ -80,18 +81,19 @@ void SimpleServer::ReadRequestHandler(int fd) {
           message->ResetBuffer(data_length);
         }
         catch (std::exception& err) {
-          fprintf(stderr, "Can't parse \"%s\" as int32 value", result[1].c_str());
+          fprintf(stderr, "Can't parse \"%s\" as int32 value",
+                  result[1].c_str());
           message->SetState(TestMessage::ERROR);
           return;
         }
-        message->SetState(TestMessage::GETTING);
+        message->SetState(TestMessage::READING);
         break;
       }
     }
   }
 
   // Begin reading message data.
-  if (message->state() == TestMessage::GETTING) {
+  if (message->state() == TestMessage::READING) {
     char buf[BUFSIZE];
     while ((nread = br.Read(buf, 0, BUFSIZE)) > 0) {
       message->WriteToBuffer(buf, nread);
@@ -102,9 +104,9 @@ void SimpleServer::ReadRequestHandler(int fd) {
     }
   }
 
-  // TODO: Check message status and submit new handlers to event manager.
+  // Check message status and submit new handlers to event manager.
   if (message->state() == TestMessage::INIT ||
-      message->state() == TestMessage::GETTING) {
+      message->state() == TestMessage::READING) {
     event_manger_.AddTaskWaitingReadable(fd,
         Base::NewCallBack(&SimpleServer::ReadRequestHandler, this, fd));
   }
@@ -115,6 +117,27 @@ void SimpleServer::ReadRequestHandler(int fd) {
 }
 
 void SimpleServer::WriteRequestHandler(int fd) {
+  if (messages_map_.find(fd) == messages_map_.end()) {
+    messages_map_[fd] = new TestMessage();
+  }
+  TestMessage* message = messages_map_[fd];
+
+  int nwrite = write(fd, message->CharBuffer() + message->written_size(),
+                         message->received_size() - message->written_size());
+  
+  if (nwrite == message->received_size()) {
+    // finish writing, close the this session.
+    close(fd);
+    messages_map_.erase(messages_map_.find(fd));
+  }
+  else {
+    message->SetWrittenSize(nwrite);
+    if (nwrite > 0) {
+      message->SetState(TestMessage::WRITING);
+    }
+    event_manger_.AddTaskWaitingWritable(fd,
+        Base::NewCallBack(&SimpleServer::WriteRequestHandler, this, fd));
+  }
 }
 
 

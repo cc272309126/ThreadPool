@@ -109,6 +109,7 @@ void Epoll::SetAwakeCallBack(EpollAwakeCallBack* cb) {
 }
 
 void Epoll::AddMonitorReadableEvent(int fd) {
+  // TODO: Are epoll_wait and epoll_ctl thread-safe?
   std::unique_lock<std::mutex> lock(mutex_);
   Add_Event(fd, EPOLLIN | EPOLLONESHOT);
 }

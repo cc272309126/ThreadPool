@@ -13,7 +13,7 @@ class FileDescriptorInterface {
   FileDescriptorInterface() = default;
   FileDescriptorInterface(const FileDescriptorInterface& fdInterface) = delete;
   void operator=(const FileDescriptorInterface& fdInterface) = delete;
-  FileDescriptorInterface(const int fd);
+  FileDescriptorInterface(const int fd, const bool auto_close);
   virtual ~FileDescriptorInterface() {
     //printf("deleting interface\n");
     Close();
@@ -25,7 +25,7 @@ class FileDescriptorInterface {
   virtual int Read(void* buffer, const int nbytes) const = 0;
   virtual int Write(const void* buf, const int nbytes) const = 0;
   virtual int Close() {
-    if (!closed_ && fd_ > 0) {
+    if (auto_close_ && !closed_ && fd_ > 0) {
       close(fd_);
       closed_ = true;
       return 0;
@@ -39,6 +39,7 @@ class FileDescriptorInterface {
  protected:
   unsigned int fd_ = -1;
   bool closed_ = true;
+  bool auto_close_ = true;
 };
 
 }  // namespace IO

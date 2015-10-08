@@ -17,7 +17,8 @@ class Socket : public IO::FileDescriptorInterface {
   Socket(const std::string hostname) :
     hostname_(hostname) {}
   // construct from fd
-  Socket(const int fd) { setFd(fd); }
+  Socket(const int fd, bool auto_close=true) :
+      IO::FileDescriptorInterface(fd, auto_close) {}
   ~Socket() {}
 
   static Socket* CreateClientSocket(

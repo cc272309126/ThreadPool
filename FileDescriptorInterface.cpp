@@ -2,7 +2,8 @@
 
 namespace IO {
 
-FileDescriptorInterface::FileDescriptorInterface(const int fd) {
+FileDescriptorInterface::FileDescriptorInterface(
+    const int fd, const bool auto_close) : auto_close_(auto_close){
   setFd(fd);
 }
 

@@ -3,6 +3,7 @@
 
 #include <iostream>
 #include <map>
+#include <vector>
 
 #include "Socket.h"
 #include "EventManager.h"
@@ -29,8 +30,9 @@ class TestMessage {
  public:
   enum State {
     INIT,
-    GETTING,
+    READING,
     FINISHREADING,
+    WRITING,
     ERROR,
   };
  
@@ -45,7 +47,8 @@ class TestMessage {
   int bufsize() const { return bufsize_; }
 
   int received_size() const { return received_size_; }
-
+  int written_size() const { return written_size_; }
+  void SetWrittenSize(int size) { written_size_ = size; }
 
   void WriteToBuffer(const char* data, int size);
 
@@ -53,11 +56,16 @@ class TestMessage {
 
   char* CharBuffer() const;
 
+  void SetSendingVector(const std::vector<int>& v) { vec_ = v; }
+  const std::vector<int> SendingVector() const { return vec_; };
+
  private:
   char* buf = nullptr;
   State state_ = INIT;
   int bufsize_ = 0;
   int received_size_ = 0;
+  int written_size_ = 0;
+  std::vector<int> vec_;
 };
 
 #endif  /* SimpleServer */
