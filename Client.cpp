@@ -20,7 +20,17 @@ void SimpleClient::StartSession() {
       Network::Socket::CreateClientSocket(hostname_, port_);
 
   std::unique_ptr<TestMessage> message(GenerateTestMessage());
-  
+  // Fill sending buffer with random data.
+  int bufsize = message->bufsize();
+  for (int i = 0; i < bufsize; i++) {
+    char c = (char)(rand() % 256);
+    message->WriteToBuffer(&c, 1);
+  }
+
+  // Send header line.
+  std::string header = "size = " + std::to_string(bufsize) + "\n";
+  socket->Write(header.c_str(), header.length());
+
   // Start sending chunks.
   int last_index = 0;
   for (const int index: message->SendingVector()) {
@@ -36,7 +46,6 @@ void SimpleClient::StartSession() {
   }
 
   // Start receiving chunks
-  int bufsize = message->bufsize();
   char recv_buf[bufsize];
   int nread = 0, offset = 0;
   while ((nread = socket->Read(recv_buf + offset, bufsize - offset)) > 0) {
@@ -55,7 +64,7 @@ void SimpleClient::StartSession() {
 }
 
 TestMessage* SimpleClient::GenerateTestMessage() {
-  int size = rand() % 500 + 1;
+  int size = rand() % 20 + 1;
   TestMessage* message = new TestMessage(size);
 
   int num = rand() % (int)sqrt(size) + 1;

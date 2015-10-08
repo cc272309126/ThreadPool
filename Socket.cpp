@@ -20,11 +20,6 @@ Socket* Socket::CreateClientSocket(
     return NULL;
   }
 
-  if (!block) {
-    int x = fcntl(fd_, F_GETFL, 0);
-    fcntl(fd_, F_SETFL, x | O_NONBLOCK);
-  }
-
   // get server ip
   server = gethostbyname(hostname.c_str());
   if (server == NULL) {
@@ -40,8 +35,13 @@ Socket* Socket::CreateClientSocket(
 
   /* Now connect to the server */
   if (connect(fd_, (struct sockaddr*)&server_addr, sizeof(server_addr)) < 0) {
-    fprintf(stderr, "ERROR connecting");
+    fprintf(stderr, "ERROR connecting\n");
     return NULL;
+  }
+
+  if (!block) {
+    int x = fcntl(fd_, F_GETFL, 0);
+    fcntl(fd_, F_SETFL, x | O_NONBLOCK);
   }
 
   Socket *new_socket = new Socket(hostname);
@@ -56,7 +56,7 @@ Socket* Socket::CreateServerSocket(const int port, bool block) {
   int fd_ = socket(AF_INET, SOCK_STREAM, 0);
  
   if (fd_ < 0) {
-    fprintf(stderr, "ERROR: opening socket");
+    fprintf(stderr, "ERROR: opening socket\n");
     return NULL;
   }
 

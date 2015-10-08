@@ -59,6 +59,7 @@ class EventManager {
   EventManager(int thread_pool_size);
   EventManager(const EventManager&) = delete;
   EventManager& operator=(const EventManager&) = delete;
+  ~EventManager();
 
   void SetThreadPoolSize(size_t size);
   size_t Size();
@@ -66,6 +67,8 @@ class EventManager {
   void AddTask(Base::Closure* task);
   void AddTaskWaitingReadable(int fd, Base::Closure* task);
   void AddTaskWaitingWritable(int fd, Base::Closure* task);
+  void RemoveTaskWaitingReadable(int fd);
+  void RemoveTaskWaitingWritable(int fd);
 
   void Start();
   void AwaitTermination();

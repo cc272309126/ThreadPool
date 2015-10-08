@@ -12,7 +12,7 @@ class TestMessage;
 
 class SimpleServer {
  public:
-  SimpleServer(int port, int event_manger_pool_size);
+  SimpleServer(int port, int event_manger_pool_size=5);
   void Start();
 
  private:

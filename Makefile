@@ -11,7 +11,7 @@ OBJ = ThreadPool.o \
       Utils.o \
       StringBuilder.o \
 
-default: test client
+default: test client server
 
 ThreadPool.o: ThreadPool.h ThreadPool.cpp
 	$(CC) -c ThreadPool.cpp
@@ -49,11 +49,17 @@ main.o: main.cpp
 Client_main.o: Client_main.cpp
 	$(CC) -c Client_main.cpp
 
+Server_main.o: Server_main.cpp
+	$(CC) -c Server_main.cpp
+
 test: $(OBJ) main.o
 	$(CC) $(OBJ) main.o -o test $(LFLAG)
 
 client: $(OBJ) Client_main.o
 	$(CC) $(OBJ) Client_main.o -o client $(LFLAG)
+
+server: $(OBJ) Server_main.o
+	$(CC) $(OBJ) Server_main.o -o server $(LFLAG)
 
 clean:
 	rm -rf test

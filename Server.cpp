@@ -27,36 +27,39 @@ void SimpleServer::Start() {
   }
   std::cout << "Start serving" << std::endl;
   // TODO: Submit it to event manager.
-  HttpConnectionListenerHandler();
+  event_manger_.AddTask(
+      Base::NewCallBack(&SimpleServer::HttpConnectionListenerHandler, this));;
+  event_manger_.Start();
+  event_manger_.AwaitTermination();
 }
 
 void SimpleServer::HttpConnectionListenerHandler() {
   struct sockaddr_in cli_addr;
   unsigned int clilen = sizeof(cli_addr);
   /* Accept actual connection from the client */
-  Executors::FixedThreadPool pool(5);
   while (1) {
     int newsockfd = accept(listen_socket_->getFd(),
                            (struct sockaddr*)&cli_addr,
                            &clilen);
-    int x = fcntl(newsockfd, F_GETFL, 0);
-    fcntl(newsockfd, F_SETFL, x | O_NONBLOCK);
+    // int x = fcntl(newsockfd, F_GETFL, 0);
+    // fcntl(newsockfd, F_SETFL, x | O_NONBLOCK);
     std::cout << "*************** Accept *******************" << std::endl;
     if (newsockfd < 0) {
       std::cerr << "ERORR: Accept connection failed" << std::endl;
       continue;
     }
     // TOOD: Submit it to event manager.
-    pool.AddTask(
+    event_manger_.AddTaskWaitingReadable(newsockfd,
         Base::NewCallBack(&SimpleServer::ReadRequestHandler, this, newsockfd));
   }
 }
 
 void SimpleServer::ReadRequestHandler(int fd) {
   if (messages_map_.find(fd) == messages_map_.end()) {
-    messages_map_[fd] = new TestMessage();
+    messages_map_[fd] = new TestMessage(32);
   }
   TestMessage* message = messages_map_[fd];
+  std::cout << "hehe0" << std::endl;
 
   // Create a buffered data reader on the socket.
   std::unique_ptr<IO::FileDescriptorInterface> client_socket(
@@ -79,6 +82,8 @@ void SimpleServer::ReadRequestHandler(int fd) {
         try {
           int data_length = std::stoi(StringUtils::Strip(result[1]));
           message->ResetBuffer(data_length);
+          std::cout << "data lengh = " << data_length << std::endl;
+          message->SetState(TestMessage::READING);
         }
         catch (std::exception& err) {
           fprintf(stderr, "Can't parse \"%s\" as int32 value",
@@ -86,7 +91,6 @@ void SimpleServer::ReadRequestHandler(int fd) {
           message->SetState(TestMessage::ERROR);
           return;
         }
-        message->SetState(TestMessage::READING);
         break;
       }
     }
@@ -96,6 +100,7 @@ void SimpleServer::ReadRequestHandler(int fd) {
   if (message->state() == TestMessage::READING) {
     char buf[BUFSIZE];
     while ((nread = br.Read(buf, 0, BUFSIZE)) > 0) {
+      std::cout << "read " << nread << std::endl;
       message->WriteToBuffer(buf, nread);
       if (message->IsFull()) {
         message->SetState(TestMessage::FINISHREADING);
@@ -107,18 +112,18 @@ void SimpleServer::ReadRequestHandler(int fd) {
   // Check message status and submit new handlers to event manager.
   if (message->state() == TestMessage::INIT ||
       message->state() == TestMessage::READING) {
-    event_manger_.AddTaskWaitingReadable(fd,
-        Base::NewCallBack(&SimpleServer::ReadRequestHandler, this, fd));
   }
   else if (message->state() == TestMessage::FINISHREADING) {
-    event_manger_.AddTaskWaitingWritable(fd,
-        Base::NewCallBack(&SimpleServer::WriteRequestHandler, this, fd));
+    std::cout << "removing for " << fd << std::endl;
+    event_manger_.RemoveTaskWaitingReadable(fd);
+    //event_manger_.AddTaskWaitingWritable(fd,
+    //    Base::NewCallBack(&SimpleServer::WriteRequestHandler, this, fd));
   }
 }
 
 void SimpleServer::WriteRequestHandler(int fd) {
   if (messages_map_.find(fd) == messages_map_.end()) {
-    messages_map_[fd] = new TestMessage();
+    messages_map_[fd] = new TestMessage(32);
   }
   TestMessage* message = messages_map_[fd];
 
@@ -143,7 +148,7 @@ void SimpleServer::WriteRequestHandler(int fd) {
 
 // ---------------------------- TestMessage --------------------------------- //
 TestMessage::TestMessage(int size) : bufsize_(size) {
-  buf = new char[BUFSIZE];
+  buf = new char[size];
 }
 
 TestMessage::~TestMessage() {
@@ -165,12 +170,13 @@ char* TestMessage::CharBuffer() const {
 }
 
 void TestMessage::WriteToBuffer(const char* data, int size) {
-  if (size < 0) {
+  if (size < 0 || !buf) {
     return;
   }
   int write_size =
       size < bufsize_ - received_size_? size : bufsize_ - received_size_;
   memcpy(buf + received_size_, data, write_size);
+  received_size_ += write_size;
 }
 
 void TestMessage::ResetBuffer(int size) {

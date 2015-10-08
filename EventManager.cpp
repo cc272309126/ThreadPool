@@ -1,5 +1,6 @@
 #include <stdlib.h>
 #include <unistd.h>
+#include <iostream>
 
 #include "EventManager.h"
 
@@ -12,6 +13,10 @@ EventManager::EventManager(int thread_pool_size) {
     thread_pool_size = 3;
   }
   thread_pool_.SetPoolSize(thread_pool_size);
+}
+
+EventManager::~EventManager() {
+  std::cout << "deleting event manager" << std::endl;
 }
 
 void EventManager::SetThreadPoolSize(size_t size) {
@@ -40,6 +45,7 @@ void EventManager::EpollAwakeHandler(const Epoll::ActiveEvents* active_events) {
   for (auto i = 0; i < active_events->num(); i++) {
     int fd = active_events->events()[i].data.fd;
     if (inactive_tasks_map_.find(fd) != inactive_tasks_map_.end()) {
+      std::cout << "find task on fd " << fd << std::endl;
       thread_pool_.AddTask(inactive_tasks_map_[fd]);
     }
   }
@@ -66,6 +72,27 @@ void EventManager::AddTaskWaitingWritable(int fd, Base::Closure* task) {
   epoll_.AddMonitorWritableEvent(fd);
 }
 
+void EventManager::RemoveTaskWaitingReadable(int fd) {
+  {
+    std::unique_lock<std::mutex> lock(mutex_);
+    if (inactive_tasks_map_.find(fd) != inactive_tasks_map_.end()) {
+      inactive_tasks_map_.erase(inactive_tasks_map_.find(fd));
+    }
+  }
+  // Don't lock epoll_ with mutex_. It has internal lock mechanism.
+  epoll_.DeleteMonitorReadableEvent(fd);
+}
+
+void EventManager::RemoveTaskWaitingWritable(int fd) {
+  {
+    std::unique_lock<std::mutex> lock(mutex_);
+    if (inactive_tasks_map_.find(fd) != inactive_tasks_map_.end()) {
+      inactive_tasks_map_.erase(inactive_tasks_map_.find(fd));
+    }
+  }
+  epoll_.DeleteMonitorWritableEvent(fd);
+}
+
 void EventManager::AwaitTermination() {
   thread_pool_.AwaitTermination();
 }
@@ -76,13 +103,15 @@ void EventManager::Stop() {
 
 
 // -------------------------------- Epoll ----------------------------------- //
-const int Epoll::fd_size_ = 1024;
+const int Epoll::fd_size_ = 100;
 
 Epoll::Epoll() {
   epollfd_ = epoll_create(fd_size_);
+  std::cout << "epollfd = " << epollfd_ << std::endl;
 }
 
 Epoll::~Epoll() {
+  std::cout << "deleting epoll" << std::endl;
   close(epollfd_);
 }
 
@@ -91,6 +120,7 @@ void Epoll::StartPolling() {
   struct epoll_event events[EPOLLEVENTS];
   while (1) {
     auto ret = epoll_wait(epollfd_, events, EPOLLEVENTS, -1);
+    std::cout << "awakening " << ret << std::endl;
     HandleEvents(ret, events);
   }
 }
