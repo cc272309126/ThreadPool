@@ -53,7 +53,7 @@ int SimpleClient::RunOneSession() {
                 << " bytes, actual " << nwrite << std::endl;
       return -1;
     }
-    message->SetWrittenSize(message->written_size() + nwrite);
+    message->AddWrittenSize(nwrite);
     // Pause for few milliseconds to create sending interval.
     std::this_thread::sleep_for(std::chrono::milliseconds(rand() % 3));
   }

@@ -51,7 +51,7 @@ class TestMessage {
 
   int received_size() const { return received_size_; }
   int written_size() const { return written_size_; }
-  void SetWrittenSize(int size) { written_size_ = size; }
+  void AddWrittenSize(int size) { written_size_ += size; }
 
   void WriteToBuffer(const char* data, int size);
 

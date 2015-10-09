@@ -56,60 +56,57 @@ void EventManager::AddTask(Base::Closure* task) {
   thread_pool_.AddTask(task);
 }
 
-void EventManager::AddTaskWaitingReadable(int fd, Base::Closure* task) {
-  {
-    std::unique_lock<std::mutex> lock(mutex_);
-    if (inactive_tasks_map_.find(fd) != inactive_tasks_map_.end()) {
-      delete inactive_tasks_map_[fd];
-    }
-    inactive_tasks_map_[fd] = task;
+int EventManager::AddTaskWaitingReadable(int fd, Base::Closure* task) {
+  std::unique_lock<std::mutex> lock(mutex_);
+  int ret = epoll_.AddMonitorReadableEvent(fd);
+  if (ret) {
+    return ret;
   }
-  // Don't lock epoll_ with mutex_. It has internal lock mechanism.
-  epoll_.AddMonitorReadableEvent(fd);
+  if (inactive_tasks_map_.find(fd) != inactive_tasks_map_.end()) {
+    delete inactive_tasks_map_[fd];
+  }
+  inactive_tasks_map_[fd] = task;
+  return 0;
 }
 
-void EventManager::AddTaskWaitingWritable(int fd, Base::Closure* task) {
-  {
-    std::unique_lock<std::mutex> lock(mutex_);
-    if (inactive_tasks_map_.find(fd) != inactive_tasks_map_.end()) {
-      delete inactive_tasks_map_[fd];
-    }
-    inactive_tasks_map_[fd] = task;
+int EventManager::AddTaskWaitingWritable(int fd, Base::Closure* task) {
+  std::unique_lock<std::mutex> lock(mutex_);
+  int ret = epoll_.AddMonitorWritableEvent(fd);
+  if (ret) {
+    return ret;
   }
-  epoll_.AddMonitorWritableEvent(fd);
+  if (inactive_tasks_map_.find(fd) != inactive_tasks_map_.end()) {
+    delete inactive_tasks_map_[fd];
+  }
+  inactive_tasks_map_[fd] = task;
+  return 0;
 }
 
-void EventManager::RemoveTaskWaitingReadable(int fd) {
-  {
-    std::unique_lock<std::mutex> lock(mutex_);
-    if (inactive_tasks_map_.find(fd) != inactive_tasks_map_.end()) {
-      inactive_tasks_map_.erase(inactive_tasks_map_.find(fd));
-    }
+int EventManager::RemoveAwaitingTask(int fd) {
+  std::unique_lock<std::mutex> lock(mutex_);
+  int ret = epoll_.DeleteMonitoringEvent(fd);
+  if (ret) {
+    return ret;
   }
-  // Don't lock epoll_ with mutex_. It has internal lock mechanism.
-  epoll_.DeleteMonitorReadableEvent(fd);
+  if (inactive_tasks_map_.find(fd) != inactive_tasks_map_.end()) {
+    delete inactive_tasks_map_[fd];
+    inactive_tasks_map_.erase(inactive_tasks_map_.find(fd));
+  }
+  return 0;
 }
 
-void EventManager::RemoveTaskWaitingWritable(int fd) {
-  {
-    std::unique_lock<std::mutex> lock(mutex_);
-    if (inactive_tasks_map_.find(fd) != inactive_tasks_map_.end()) {
-      inactive_tasks_map_.erase(inactive_tasks_map_.find(fd));
-    }
-  }
-  epoll_.DeleteMonitorWritableEvent(fd);
-}
-
-void EventManager::ModifyTaskWaitingStatus(
+int EventManager::ModifyTaskWaitingStatus(
     int fd, int status, Base::Closure* task) {
-  {
-    std::unique_lock<std::mutex> lock(mutex_);
-    if (inactive_tasks_map_.find(fd) != inactive_tasks_map_.end()) {
-      inactive_tasks_map_.erase(inactive_tasks_map_.find(fd));
-    }
-    inactive_tasks_map_[fd] = task;
+  std::unique_lock<std::mutex> lock(mutex_);
+  int ret = epoll_.ModifyMonitorEvent(fd, status);
+  if (ret) {
+    return ret;
   }
-  epoll_.ModifyMonitorEvent(fd, status);
+  if (inactive_tasks_map_.find(fd) != inactive_tasks_map_.end()) {
+    delete inactive_tasks_map_[fd];
+  }
+  inactive_tasks_map_[fd] = task;
+  return 0;
 }
 
 void EventManager::AwaitTermination() {
@@ -146,65 +143,62 @@ void Epoll::StartPolling() {
 
 void Epoll::HandleEvents(int num, const struct epoll_event* events) {
   ActiveEvents active_events(num, events);
-  std::unique_lock<std::mutex> lock(mutex_);
+  std::unique_lock<std::mutex> lock(awake_cb_mutex_);
   if (awake_cb_) {
     (*awake_cb_)(&active_events);
   }
 }
 
 void Epoll::SetAwakeCallBack(EpollAwakeCallBack* cb) {
-  std::unique_lock<std::mutex> lock(mutex_);
+  std::unique_lock<std::mutex> lock(awake_cb_mutex_);
   awake_cb_.reset(cb);
 }
 
-void Epoll::AddMonitorReadableEvent(int fd) {
+int Epoll::AddMonitorReadableEvent(int fd) {
   // TODO: Are epoll_wait and epoll_ctl thread-safe?
   std::unique_lock<std::mutex> lock(mutex_);
   std::cout << "epoll adding readable ..." << std::endl;
-  Add_Event(fd, EPOLLIN | EPOLLONESHOT);
+  return Add_Event(fd, EPOLLIN | EPOLLONESHOT);
 }
 
-void Epoll::AddMonitorWritableEvent(int fd) {
+int Epoll::AddMonitorWritableEvent(int fd) {
   std::unique_lock<std::mutex> lock(mutex_);
   std::cout << "epoll adding writable ..." << std::endl;
-  Add_Event(fd, EPOLLOUT | EPOLLONESHOT);
+  return Add_Event(fd, EPOLLOUT | EPOLLONESHOT);
 }
 
-void Epoll::DeleteMonitorReadableEvent(int fd) {
+int Epoll::DeleteMonitoringEvent(int fd) {
   std::unique_lock<std::mutex> lock(mutex_);
-  Delete_Event(fd, EPOLLIN | EPOLLONESHOT);
+  return Delete_Event(fd, EPOLLIN | EPOLLONESHOT);
 }
 
-void Epoll::DeleteMonitorWritableEvent(int fd) {
+int Epoll::ModifyMonitorEvent(int fd, int status) {
   std::unique_lock<std::mutex> lock(mutex_);
-  Delete_Event(fd, EPOLLOUT | EPOLLONESHOT);
+  return Modify_Event(fd, status);
 }
 
-void Epoll::ModifyMonitorEvent(int fd, int status) {
-  std::unique_lock<std::mutex> lock(mutex_);
-  Modify_Event(fd, status);
-}
-
-void Epoll::Add_Event(int fd, int event) {
+int Epoll::Add_Event(int fd, int event) {
   struct epoll_event ev;
   ev.events = event;
   ev.data.fd = fd;
   int ret = epoll_ctl(epollfd_, EPOLL_CTL_ADD, fd, &ev);
-  (void)ret;
+  return ret;
 }
 
-void Epoll::Delete_Event(int fd, int event) {
+int Epoll::Delete_Event(int fd, int event) {
   struct epoll_event ev;
   ev.events = event;
   ev.data.fd = fd;
-  epoll_ctl(epollfd_, EPOLL_CTL_DEL, fd, &ev);
+  int ret = epoll_ctl(epollfd_, EPOLL_CTL_DEL, fd, &ev);
+  return ret;
 }
 
-void Epoll::Modify_Event(int fd, int event) {
+int Epoll::Modify_Event(int fd, int event) {
   struct epoll_event ev;
   ev.events = event;
   ev.data.fd = fd;
-  epoll_ctl(epollfd_, EPOLL_CTL_MOD, fd, &ev);
+  int ret = epoll_ctl(epollfd_, EPOLL_CTL_MOD, fd, &ev);
+  return ret;
 }
 
 

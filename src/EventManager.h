@@ -30,11 +30,10 @@ class Epoll {
   Epoll();
   ~Epoll();
 
-  void AddMonitorReadableEvent(int fd);
-  void AddMonitorWritableEvent(int fd);
-  void DeleteMonitorReadableEvent(int fd);
-  void DeleteMonitorWritableEvent(int fd);
-  void ModifyMonitorEvent(int fd, int status);
+  int AddMonitorReadableEvent(int fd);
+  int AddMonitorWritableEvent(int fd);
+  int DeleteMonitoringEvent(int fd);
+  int ModifyMonitorEvent(int fd, int status);
 
   void StartPolling();
   void HandleEvents(int num, const struct epoll_event* events);
@@ -46,13 +45,14 @@ class Epoll {
   void SetAwakeCallBack(EpollAwakeCallBack* cb);
 
  private:
-  void Add_Event(int fd, int event);
-  void Delete_Event(int fd, int event);
-  void Modify_Event(int fd, int event);
+  int Add_Event(int fd, int event);
+  int Delete_Event(int fd, int event);
+  int Modify_Event(int fd, int event);
 
   int epollfd_;
   std::unique_ptr<EpollAwakeCallBack> awake_cb_;
   static const int fd_size_;
+  std::mutex awake_cb_mutex_;
   std::mutex mutex_;
 };
 
@@ -67,11 +67,10 @@ class EventManager {
   size_t Size();
 
   void AddTask(Base::Closure* task);
-  void AddTaskWaitingReadable(int fd, Base::Closure* task);
-  void AddTaskWaitingWritable(int fd, Base::Closure* task);
-  void RemoveTaskWaitingReadable(int fd);
-  void RemoveTaskWaitingWritable(int fd);
-  void ModifyTaskWaitingStatus(int fd, int status, Base::Closure* task);
+  int AddTaskWaitingReadable(int fd, Base::Closure* task);
+  int AddTaskWaitingWritable(int fd, Base::Closure* task);
+  int RemoveAwaitingTask(int fd);
+  int ModifyTaskWaitingStatus(int fd, int status, Base::Closure* task);
 
   void Start();
   void AwaitTermination();

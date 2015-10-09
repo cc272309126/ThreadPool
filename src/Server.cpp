@@ -8,6 +8,7 @@
 #include <assert.h>
 
 #include <iostream>
+#include <chrono>
 
 #include "Strings.h"
 #include "BufferedDataReader.h"
@@ -102,7 +103,6 @@ void SimpleServer::ReadRequestHandler(int fd) {
     }
     if (nread == 0 || (errno != EAGAIN && errno != 0)) {
       RemoveSession(fd);
-      perror("");
       return;
     }
   }
@@ -133,7 +133,7 @@ void SimpleServer::ReadRequestHandler(int fd) {
         Base::NewCallBack(&SimpleServer::ReadRequestHandler, this, fd));
   }
   else if (message->state() == TestMessage::FINISHREADING) {
-    std::cout << "removing for " << fd << std::endl;
+    std::cout << "Change to writing awating for " << fd << std::endl;
     //event_manger_.RemoveTaskWaitingReadable(fd);
     event_manger_.ModifyTaskWaitingStatus(fd, EPOLLOUT | EPOLLONESHOT,
         Base::NewCallBack(&SimpleServer::WriteRequestHandler, this, fd));
@@ -153,14 +153,18 @@ void SimpleServer::WriteRequestHandler(int fd) {
 
   int nwrite = write(fd, message->CharBuffer() + message->written_size(),
                          message->received_size() - message->written_size());
-  printf("send %d bytes\n", nwrite);
-  if (nwrite == message->received_size()) {
+  if (nwrite < 0) {
+    RemoveSession(fd);
+  }
+  message->AddWrittenSize(nwrite);
+
+  if (message->written_size() == message->received_size()) {
     // finish writing, close this session.
     RemoveSession(fd);
   }
   else {
-    message->SetWrittenSize(nwrite);
-    if (nwrite > 0) {
+    // message->AddWrittenSize(nwrite);
+    if (message->state() == TestMessage::FINISHREADING && nwrite > 0) {
       message->SetState(TestMessage::WRITING);
     }
     event_manger_.ModifyTaskWaitingStatus(fd, EPOLLOUT | EPOLLONESHOT,
@@ -169,27 +173,21 @@ void SimpleServer::WriteRequestHandler(int fd) {
 }
 
 void SimpleServer::RemoveSession(int fd) {
-  if (messages_map_.find(fd) == messages_map_.end()) {
-    return;
-  }
-  TestMessage* msg = messages_map_[fd];
-
   // Remove fd from epoll.
-  if (msg->state() == TestMessage::INIT ||
-      msg->state() == TestMessage::READING) {
-    event_manger_.RemoveTaskWaitingReadable(fd);
-  }
-  else if (msg->state() == TestMessage::FINISHREADING ||
-           msg->state() == TestMessage::WRITING) {
-    event_manger_.RemoveTaskWaitingWritable(fd);
-  }
+  event_manger_.RemoveAwaitingTask(fd);
+
+  // Potential race condition: don't close fd before de-registering the event
+  // from event manager.
+  close(fd);
 
   // Delete fd_message map record.
-  close(fd);
   {
     std::unique_lock<std::mutex> lock(mutex_);
+    if (messages_map_.find(fd) == messages_map_.end()) {
+      return;
+    }
+    delete messages_map_[fd];
     messages_map_.erase(messages_map_.find(fd));
-    delete msg;
   }
 }
 
