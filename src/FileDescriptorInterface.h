@@ -14,24 +14,14 @@ class FileDescriptorInterface {
   FileDescriptorInterface(const FileDescriptorInterface& fdInterface) = delete;
   void operator=(const FileDescriptorInterface& fdInterface) = delete;
   FileDescriptorInterface(const int fd, const bool auto_close);
-  virtual ~FileDescriptorInterface() {
-    //printf("deleting interface\n");
-    Close();
-  }
+  virtual ~FileDescriptorInterface();
 
   virtual void setFd(const int fd);
   virtual int getFd() const { return fd_; }
 
   virtual int Read(void* buffer, const int nbytes) const = 0;
   virtual int Write(const void* buf, const int nbytes) const = 0;
-  virtual int Close() {
-    if (auto_close_ && !closed_ && fd_ > 0) {
-      close(fd_);
-      closed_ = true;
-      return 0;
-    }
-    return -1;
-  }
+  virtual int Close();
 
   void setClosed() { closed_ = true; }
   bool closed() const { return closed_; }

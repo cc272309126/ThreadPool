@@ -100,6 +100,11 @@ void SimpleServer::ReadRequestHandler(int fd) {
         break;
       }
     }
+    if (nread == 0 || (errno != EAGAIN && errno != 0)) {
+      RemoveSession(fd);
+      perror("");
+      return;
+    }
   }
 
   // Begin reading message data.
@@ -112,6 +117,11 @@ void SimpleServer::ReadRequestHandler(int fd) {
         message->SetState(TestMessage::FINISHREADING);
         break;
       }
+    }
+    // Unexpected EOF or errno other than EAGAIN.
+    if ((nread == 0 && !message->IsFull()) || (errno != EAGAIN)) {
+      RemoveSession(fd);
+      return;
     }
   }
 
@@ -145,12 +155,8 @@ void SimpleServer::WriteRequestHandler(int fd) {
                          message->received_size() - message->written_size());
   printf("send %d bytes\n", nwrite);
   if (nwrite == message->received_size()) {
-    // finish writing, close the this session.
-    close(fd);
-    {
-      std::unique_lock<std::mutex> lock(mutex_);
-      messages_map_.erase(messages_map_.find(fd));
-    }
+    // finish writing, close this session.
+    RemoveSession(fd);
   }
   else {
     message->SetWrittenSize(nwrite);
@@ -159,6 +165,31 @@ void SimpleServer::WriteRequestHandler(int fd) {
     }
     event_manger_.ModifyTaskWaitingStatus(fd, EPOLLOUT | EPOLLONESHOT,
         Base::NewCallBack(&SimpleServer::WriteRequestHandler, this, fd));
+  }
+}
+
+void SimpleServer::RemoveSession(int fd) {
+  if (messages_map_.find(fd) == messages_map_.end()) {
+    return;
+  }
+  TestMessage* msg = messages_map_[fd];
+
+  // Remove fd from epoll.
+  if (msg->state() == TestMessage::INIT ||
+      msg->state() == TestMessage::READING) {
+    event_manger_.RemoveTaskWaitingReadable(fd);
+  }
+  else if (msg->state() == TestMessage::FINISHREADING ||
+           msg->state() == TestMessage::WRITING) {
+    event_manger_.RemoveTaskWaitingWritable(fd);
+  }
+
+  // Delete fd_message map record.
+  close(fd);
+  {
+    std::unique_lock<std::mutex> lock(mutex_);
+    messages_map_.erase(messages_map_.find(fd));
+    delete msg;
   }
 }
 

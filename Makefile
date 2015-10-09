@@ -1,66 +1,46 @@
-CC=g++ -std=c++11 -Wall -Werror
+CC=g++ -std=c++11
+CFLAGS=-Wall -Werror
 LFLAG=-pthread
-OBJ = ThreadPool.o \
-      EventManager.o \
-      Server.o \
-      Client.o \
-      Socket.o \
-      FileDescriptorInterface.o \
-      BufferedDataReader.o \
-      Strings.o \
-      Utils.o \
-      StringBuilder.o \
+SRC_DIR=src
+OBJ_DIR=lib
+
+OBJ = lib/ThreadPool.o \
+      lib/EventManager.o \
+      lib/Server.o \
+      lib/Client.o \
+      lib/Socket.o \
+      lib/FileDescriptorInterface.o \
+      lib/BufferedDataReader.o \
+      lib/Strings.o \
+      lib/Utils.o \
+      lib/StringBuilder.o \
 
 default: test client server
 
-ThreadPool.o: ThreadPool.h ThreadPool.cpp
-	$(CC) -c ThreadPool.cpp
+$(OBJ_DIR)/%.o: $(SRC_DIR)/%.cpp $(SRC_DIR)/%.h
+	$(CC) $(CFLAGS) -c $< -o $@
 
-EventManager.o: EventManager.h EventManager.cpp
-	$(CC) -c EventManager.cpp
+$(OBJ_DIR)/%.o: $(SRC_DIR)/%.cpp
+	$(CC) $(CFLAGS) -c $< -o $@
 
-Server.o: Server.h Server.cpp
-	$(CC) -c Server.cpp
+$(OBJ_DIR)/main.o: $(SRC_DIR)/main.cpp
+	$(CC) -c $(SRC_DIR)/main.cpp -o $@
 
-Client.o: Client.h Client.cpp
-	$(CC) -c Client.cpp
+$(OBJ_DIR)/Client_main.o: $(SRC_DIR)/Client_main.cpp
+	$(CC) -c $(SRC_DIR)/Client_main.cpp -o $@
 
-Socket.o: Socket.h Socket.cpp
-	$(CC) -c Socket.cpp
+$(OBJ_DIR)/Server_main.o: $(SRC_DIR)/Server_main.cpp
+	$(CC) -c $(SRC_DIR)/Server_main.cpp -o $@
 
-FileDescriptorInterface.o: FileDescriptorInterface.h FileDescriptorInterface.cpp
-	$(CC) -c FileDescriptorInterface.cpp
+test: $(OBJ) $(OBJ_DIR)/main.o
+	$(CC) $(OBJ) $(OBJ_DIR)/main.o -o test $(LFLAG)
 
-BufferedDataReader.o: BufferedDataReader.h BufferedDataReader.cpp
-	$(CC) -c BufferedDataReader.cpp
+client: $(OBJ) $(OBJ_DIR)/Client_main.o
+	$(CC) $(OBJ) $(OBJ_DIR)/Client_main.o -o client $(LFLAG)
 
-Strings.o: Strings.h Strings.cpp
-	$(CC) -c Strings.cpp
-
-Utils.o: Utils.h Utils.cpp
-	$(CC) -c Utils.cpp
-
-StringBuilder.o: StringBuilder.h StringBuilder.cpp
-	$(CC) -c StringBuilder.cpp
-
-main.o: main.cpp
-	$(CC) -c main.cpp
-
-Client_main.o: Client_main.cpp
-	$(CC) -c Client_main.cpp
-
-Server_main.o: Server_main.cpp
-	$(CC) -c Server_main.cpp
-
-test: $(OBJ) main.o
-	$(CC) $(OBJ) main.o -o test $(LFLAG)
-
-client: $(OBJ) Client_main.o
-	$(CC) $(OBJ) Client_main.o -o client $(LFLAG)
-
-server: $(OBJ) Server_main.o
-	$(CC) $(OBJ) Server_main.o -o server $(LFLAG)
+server: $(OBJ) $(OBJ_DIR)/Server_main.o
+	$(CC) $(OBJ) $(OBJ_DIR)/Server_main.o -o server $(LFLAG)
 
 clean:
 	rm -rf test server client
-	rm -rf *.o
+	rm -rf lib/*.o

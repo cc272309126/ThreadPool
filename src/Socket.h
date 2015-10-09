@@ -15,11 +15,12 @@ class Socket : public IO::FileDescriptorInterface {
   Socket() = default;
   // construct client port
   Socket(const std::string hostname) :
+    IO::FileDescriptorInterface(-1, true),
     hostname_(hostname) {}
   // construct from fd
   Socket(const int fd, bool auto_close=true) :
       IO::FileDescriptorInterface(fd, auto_close) {}
-  ~Socket() {}
+  virtual ~Socket() {}
 
   static Socket* CreateClientSocket(
       const std::string hostname, const int port, bool block=true);

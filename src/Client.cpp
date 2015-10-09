@@ -21,6 +21,9 @@ SimpleClient::SimpleClient(const std::string hostname, const int port) :
 int SimpleClient::RunOneSession() {
   Network::Socket* socket =
       Network::Socket::CreateClientSocket(hostname_, port_);
+  if (!socket) {
+    return -1;
+  }
 
   std::unique_ptr<TestMessage> message(GenerateTestMessage());
   // Fill sending buffer with random data.
@@ -36,7 +39,7 @@ int SimpleClient::RunOneSession() {
   std::string header = "size = " + std::to_string(bufsize) + "\n";
   socket->Write(header.c_str(), header.length());
 
-  //std::this_thread::sleep_for(std::chrono::milliseconds(500));
+  //std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 
   // Start sending chunks.
   int last_index = 0;
@@ -46,13 +49,13 @@ int SimpleClient::RunOneSession() {
     int nwrite =
         socket->Write(message->CharBuffer() + message->written_size(), size);
     if (nwrite != size) {
-      std::cerr << "Client write error, expect to write " << nwrite
+      std::cerr << "Client write error, expect to write " << size
                 << " bytes, actual " << nwrite << std::endl;
       return -1;
     }
     message->SetWrittenSize(message->written_size() + nwrite);
     // Pause for few milliseconds to create sending interval.
-    std::this_thread::sleep_for(std::chrono::milliseconds(rand() % 10));
+    std::this_thread::sleep_for(std::chrono::milliseconds(rand() % 3));
   }
 
   // Start receiving chunks
@@ -71,11 +74,12 @@ int SimpleClient::RunOneSession() {
     return -1;
   }
   //std::cout << "Success :)" << std::endl;
+  delete socket;
   return 0;
 }
 
 void SimpleClient::RunConcurrentSessions(int num) {
-  Executors::FixedThreadPool pool(10);
+  Executors::FixedThreadPool pool(30);
   pool.Start();
   for (int i = 0; i < num; i++) {
     pool.AddTask(Base::NewCallBack(&SimpleClient::RunOneSession, this));
@@ -85,7 +89,7 @@ void SimpleClient::RunConcurrentSessions(int num) {
 }
 
 TestMessage* SimpleClient::GenerateTestMessage() {
-  int size = rand() % 1000 + 1;
+  int size = rand() % 20 + 1;
   TestMessage* message = new TestMessage(size);
 
   int num = rand() % (int)sqrt(size) + 1;

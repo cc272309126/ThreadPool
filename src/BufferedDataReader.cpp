@@ -65,8 +65,12 @@ int BufferedDataReader::Read(char* buf, int off, const int len) {
       }
       else {
         // Re-fill the internal buffer.
-        if (refill() <= 0) {
-            return readnLeft == len? 0 : len - readnLeft;
+        int nread;
+        if ((nread = refill()) <= 0) {
+          if (len == readnLeft) {
+            return nread;
+          }
+          return len - readnLeft;
         }
       }
     }

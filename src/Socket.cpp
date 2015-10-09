@@ -16,7 +16,7 @@ Socket* Socket::CreateClientSocket(
   // Create socket
   int fd_ = socket(AF_INET, SOCK_STREAM, 0); 
   if (fd_ < 0) {
-    fprintf(stderr, "ERROR: opening socket");
+    fprintf(stderr, "ERROR: opening socket\n");
     return NULL;
   }
 

@@ -20,6 +20,7 @@ class SimpleServer {
   void HttpConnectionListenerHandler();
   void ReadRequestHandler(int fd);
   void WriteRequestHandler(int fd);
+  void RemoveSession(int fd);
 
   std::shared_ptr<Network::Socket> listen_socket_;
   Executors::EventManager event_manger_;

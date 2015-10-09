@@ -181,6 +181,7 @@ void Epoll::DeleteMonitorWritableEvent(int fd) {
 }
 
 void Epoll::ModifyMonitorEvent(int fd, int status) {
+  std::unique_lock<std::mutex> lock(mutex_);
   Modify_Event(fd, status);
 }
 
@@ -189,8 +190,7 @@ void Epoll::Add_Event(int fd, int event) {
   ev.events = event;
   ev.data.fd = fd;
   int ret = epoll_ctl(epollfd_, EPOLL_CTL_ADD, fd, &ev);
-  printf("ret = %d\n", ret);
-  perror("");
+  (void)ret;
 }
 
 void Epoll::Delete_Event(int fd, int event) {
