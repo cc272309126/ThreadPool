@@ -157,7 +157,7 @@ void SimpleServer::WriteRequestHandler(int fd) {
     if (nwrite > 0) {
       message->SetState(TestMessage::WRITING);
     }
-    event_manger_.AddTaskWaitingWritable(fd,
+    event_manger_.ModifyTaskWaitingStatus(fd, EPOLLOUT | EPOLLONESHOT,
         Base::NewCallBack(&SimpleServer::WriteRequestHandler, this, fd));
   }
 }

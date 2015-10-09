@@ -42,6 +42,7 @@ void EventManager::Start() {
 }
 
 void EventManager::EpollAwakeHandler(const Epoll::ActiveEvents* active_events) {
+  std::unique_lock<std::mutex> lock(mutex_);
   for (auto i = 0; i < active_events->num(); i++) {
     int fd = active_events->events()[i].data.fd;
     if (inactive_tasks_map_.find(fd) != inactive_tasks_map_.end()) {
