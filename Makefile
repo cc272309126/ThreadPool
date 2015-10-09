@@ -62,5 +62,5 @@ server: $(OBJ) Server_main.o
 	$(CC) $(OBJ) Server_main.o -o server $(LFLAG)
 
 clean:
-	rm -rf test
+	rm -rf test server client
 	rm -rf *.o

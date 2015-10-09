@@ -41,9 +41,11 @@ void SimpleServer::HttpConnectionListenerHandler() {
     int newsockfd = accept(listen_socket_->getFd(),
                            (struct sockaddr*)&cli_addr,
                            &clilen);
-    // int x = fcntl(newsockfd, F_GETFL, 0);
-    // fcntl(newsockfd, F_SETFL, x | O_NONBLOCK);
-    std::cout << "*************** Accept *******************" << std::endl;
+    int x = fcntl(newsockfd, F_GETFL, 0);
+    fcntl(newsockfd, F_SETFL, x | O_NONBLOCK);
+
+    static int num = 0;
+    printf("*************** Accept %d *******************\n", ++num);
     if (newsockfd < 0) {
       std::cerr << "ERORR: Accept connection failed" << std::endl;
       continue;
@@ -55,11 +57,15 @@ void SimpleServer::HttpConnectionListenerHandler() {
 }
 
 void SimpleServer::ReadRequestHandler(int fd) {
-  if (messages_map_.find(fd) == messages_map_.end()) {
-    messages_map_[fd] = new TestMessage(32);
+  std::cout << "Read_Handler() ..." << std::endl;
+  TestMessage* message = nullptr;
+  {
+    std::unique_lock<std::mutex> lock(mutex_);
+    if (messages_map_.find(fd) == messages_map_.end()) {
+      messages_map_[fd] = new TestMessage(32);
+    }
+    message = messages_map_[fd];
   }
-  TestMessage* message = messages_map_[fd];
-  std::cout << "hehe0" << std::endl;
 
   // Create a buffered data reader on the socket.
   std::unique_ptr<IO::FileDescriptorInterface> client_socket(
@@ -112,28 +118,39 @@ void SimpleServer::ReadRequestHandler(int fd) {
   // Check message status and submit new handlers to event manager.
   if (message->state() == TestMessage::INIT ||
       message->state() == TestMessage::READING) {
+    std::cout << "re-adding " << fd << std::endl;
+    event_manger_.ModifyTaskWaitingStatus(fd, EPOLLIN | EPOLLONESHOT,
+        Base::NewCallBack(&SimpleServer::ReadRequestHandler, this, fd));
   }
   else if (message->state() == TestMessage::FINISHREADING) {
     std::cout << "removing for " << fd << std::endl;
-    event_manger_.RemoveTaskWaitingReadable(fd);
-    //event_manger_.AddTaskWaitingWritable(fd,
-    //    Base::NewCallBack(&SimpleServer::WriteRequestHandler, this, fd));
+    //event_manger_.RemoveTaskWaitingReadable(fd);
+    event_manger_.ModifyTaskWaitingStatus(fd, EPOLLOUT | EPOLLONESHOT,
+        Base::NewCallBack(&SimpleServer::WriteRequestHandler, this, fd));
   }
 }
 
 void SimpleServer::WriteRequestHandler(int fd) {
-  if (messages_map_.find(fd) == messages_map_.end()) {
-    messages_map_[fd] = new TestMessage(32);
+  std::cout << "Write_Handler() ..." << std::endl;
+  TestMessage* message = nullptr;
+  {
+    std::unique_lock<std::mutex> lock(mutex_);
+    if (messages_map_.find(fd) == messages_map_.end()) {
+      messages_map_[fd] = new TestMessage(32);
+    }
+    message = messages_map_[fd];
   }
-  TestMessage* message = messages_map_[fd];
 
   int nwrite = write(fd, message->CharBuffer() + message->written_size(),
                          message->received_size() - message->written_size());
-  
+  printf("send %d bytes\n", nwrite);
   if (nwrite == message->received_size()) {
     // finish writing, close the this session.
     close(fd);
-    messages_map_.erase(messages_map_.find(fd));
+    {
+      std::unique_lock<std::mutex> lock(mutex_);
+      messages_map_.erase(messages_map_.find(fd));
+    }
   }
   else {
     message->SetWrittenSize(nwrite);

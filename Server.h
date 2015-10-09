@@ -4,6 +4,7 @@
 #include <iostream>
 #include <map>
 #include <vector>
+#include <mutex>
 
 #include "Socket.h"
 #include "EventManager.h"
@@ -24,6 +25,7 @@ class SimpleServer {
   Executors::EventManager event_manger_;
 
   std::map<int, TestMessage*> messages_map_;
+  std::mutex mutex_;
 };
 
 class TestMessage {
@@ -52,7 +54,9 @@ class TestMessage {
 
   void WriteToBuffer(const char* data, int size);
 
-  bool IsFull() const { return received_size_ == bufsize_; }
+  bool IsFull() const {
+    return received_size_ == bufsize_;
+  }
 
   char* CharBuffer() const;
 

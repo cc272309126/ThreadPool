@@ -58,6 +58,9 @@ void EventManager::AddTask(Base::Closure* task) {
 void EventManager::AddTaskWaitingReadable(int fd, Base::Closure* task) {
   {
     std::unique_lock<std::mutex> lock(mutex_);
+    if (inactive_tasks_map_.find(fd) != inactive_tasks_map_.end()) {
+      delete inactive_tasks_map_[fd];
+    }
     inactive_tasks_map_[fd] = task;
   }
   // Don't lock epoll_ with mutex_. It has internal lock mechanism.
@@ -67,6 +70,9 @@ void EventManager::AddTaskWaitingReadable(int fd, Base::Closure* task) {
 void EventManager::AddTaskWaitingWritable(int fd, Base::Closure* task) {
   {
     std::unique_lock<std::mutex> lock(mutex_);
+    if (inactive_tasks_map_.find(fd) != inactive_tasks_map_.end()) {
+      delete inactive_tasks_map_[fd];
+    }
     inactive_tasks_map_[fd] = task;
   }
   epoll_.AddMonitorWritableEvent(fd);
@@ -91,6 +97,18 @@ void EventManager::RemoveTaskWaitingWritable(int fd) {
     }
   }
   epoll_.DeleteMonitorWritableEvent(fd);
+}
+
+void EventManager::ModifyTaskWaitingStatus(
+    int fd, int status, Base::Closure* task) {
+  {
+    std::unique_lock<std::mutex> lock(mutex_);
+    if (inactive_tasks_map_.find(fd) != inactive_tasks_map_.end()) {
+      inactive_tasks_map_.erase(inactive_tasks_map_.find(fd));
+    }
+    inactive_tasks_map_[fd] = task;
+  }
+  epoll_.ModifyMonitorEvent(fd, status);
 }
 
 void EventManager::AwaitTermination() {
@@ -141,11 +159,13 @@ void Epoll::SetAwakeCallBack(EpollAwakeCallBack* cb) {
 void Epoll::AddMonitorReadableEvent(int fd) {
   // TODO: Are epoll_wait and epoll_ctl thread-safe?
   std::unique_lock<std::mutex> lock(mutex_);
+  std::cout << "epoll adding readable ..." << std::endl;
   Add_Event(fd, EPOLLIN | EPOLLONESHOT);
 }
 
 void Epoll::AddMonitorWritableEvent(int fd) {
   std::unique_lock<std::mutex> lock(mutex_);
+  std::cout << "epoll adding writable ..." << std::endl;
   Add_Event(fd, EPOLLOUT | EPOLLONESHOT);
 }
 
@@ -159,18 +179,31 @@ void Epoll::DeleteMonitorWritableEvent(int fd) {
   Delete_Event(fd, EPOLLOUT | EPOLLONESHOT);
 }
 
+void Epoll::ModifyMonitorEvent(int fd, int status) {
+  Modify_Event(fd, status);
+}
+
 void Epoll::Add_Event(int fd, int event) {
   struct epoll_event ev;
   ev.events = event;
   ev.data.fd = fd;
-  epoll_ctl(epollfd_, EPOLL_CTL_ADD, fd, &ev);
+  int ret = epoll_ctl(epollfd_, EPOLL_CTL_ADD, fd, &ev);
+  printf("ret = %d\n", ret);
+  perror("");
 }
 
 void Epoll::Delete_Event(int fd, int event) {
   struct epoll_event ev;
   ev.events = event;
   ev.data.fd = fd;
-  epoll_ctl(epollfd_, EPOLL_CTL_ADD, fd, &ev);
+  epoll_ctl(epollfd_, EPOLL_CTL_DEL, fd, &ev);
+}
+
+void Epoll::Modify_Event(int fd, int event) {
+  struct epoll_event ev;
+  ev.events = event;
+  ev.data.fd = fd;
+  epoll_ctl(epollfd_, EPOLL_CTL_MOD, fd, &ev);
 }
 
 

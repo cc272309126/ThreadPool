@@ -135,7 +135,11 @@ int BufferedDataReader::refill() {
   tail = 0;
   dataLen = 0;
   int readn = fdscrpt_->Read(buffer, bufSize);
-  //printf("read %d bytes\n", readn);
+  // printf("buffer read %d bytes\n", readn);
+  // for (int i = 0; i < readn; i++) {
+  //   printf("%c", buffer[i]);
+  // }
+  // printf("\n");
   if (readn <= 0) {
     dataLen = 0;
   }

@@ -22,8 +22,8 @@ class Socket : public IO::FileDescriptorInterface {
   ~Socket() {}
 
   static Socket* CreateClientSocket(
-      const std::string hostname, const int port, bool block=false);
-  static Socket* CreateServerSocket(const int port, bool block=false);
+      const std::string hostname, const int port, bool block=true);
+  static Socket* CreateServerSocket(const int port, bool block=true);
 
   virtual int Read(void* buffer, const int nbytes) const;
   virtual int Write(const void* buf, const int nbytes) const;

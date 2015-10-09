@@ -12,7 +12,8 @@
 class SimpleClient {
  public:
   SimpleClient(const std::string hostname, const int port);
-  void StartSession();
+  int RunOneSession();
+  void RunConcurrentSessions(int num);
 
  private:
   TestMessage* GenerateTestMessage();
