@@ -119,7 +119,7 @@ void SimpleServer::ReadRequestHandler(int fd) {
       }
     }
     // Unexpected EOF or errno other than EAGAIN.
-    if ((nread == 0 && !message->IsFull()) || (errno != EAGAIN)) {
+    if ((nread == 0 && !message->IsFull()) || (errno != EAGAIN && errno != 0)) {
       RemoveSession(fd);
       return;
     }
@@ -154,7 +154,7 @@ void SimpleServer::WriteRequestHandler(int fd) {
   int nwrite = write(fd, message->CharBuffer() + message->written_size(),
                          message->received_size() - message->written_size());
   if (nwrite < 0) {
-    RemoveSession(fd);
+    //RemoveSession(fd);
   }
   message->AddWrittenSize(nwrite);
 

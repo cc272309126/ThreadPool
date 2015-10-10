@@ -28,11 +28,9 @@ int SimpleClient::RunOneSession() {
   std::unique_ptr<TestMessage> message(GenerateTestMessage());
   // Fill sending buffer with random data.
   int bufsize = message->bufsize();
-  char c = 'a';
   for (int i = 0; i < bufsize; i++) {
-    //char c = (char)(rand() % 256);
+    char c = (char)(rand() % 256);
     message->WriteToBuffer(&c, 1);
-    c++;
   }
 
   // Send header line.
@@ -51,6 +49,7 @@ int SimpleClient::RunOneSession() {
     if (nwrite != size) {
       std::cerr << "Client write error, expect to write " << size
                 << " bytes, actual " << nwrite << std::endl;
+      delete socket;
       return -1;
     }
     message->AddWrittenSize(nwrite);
@@ -67,10 +66,12 @@ int SimpleClient::RunOneSession() {
   if (offset != bufsize) {
     std::cerr << "Client receive error, expect to get " << bufsize
                 << " bytes, actual " << offset << std::endl;
+    delete socket;
     return -1;
   }
   if (memcmp(recv_buf, message->CharBuffer(), bufsize)) {
     std::cerr << "ERROR: Received message mismatch origin" << std::endl;
+    delete socket;
     return -1;
   }
   //std::cout << "Success :)" << std::endl;
@@ -89,7 +90,7 @@ void SimpleClient::RunConcurrentSessions(int num) {
 }
 
 TestMessage* SimpleClient::GenerateTestMessage() {
-  int size = rand() % 20 + 1;
+  int size = rand() % 1000 + 1;
   TestMessage* message = new TestMessage(size);
 
   int num = rand() % (int)sqrt(size) + 1;

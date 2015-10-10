@@ -14,7 +14,7 @@ int main(int argc, char** argv) {
   //   }
   //   std::cout << "Success :) " << i << std::endl;
   // }
-  for (int i = 0; i < 10; i++) {
+  for (int i = 0; i < 500; i++) {
     client.RunConcurrentSessions(1000);
   }
   return 0;
