@@ -128,12 +128,12 @@ void SimpleServer::ReadRequestHandler(int fd) {
   // Check message status and submit new handlers to event manager.
   if (message->state() == TestMessage::INIT ||
       message->state() == TestMessage::READING) {
-    std::cout << "re-adding " << fd << std::endl;
+    // std::cout << "re-adding " << fd << std::endl;
     event_manger_.ModifyTaskWaitingStatus(fd, EPOLLIN | EPOLLONESHOT,
         Base::NewCallBack(&SimpleServer::ReadRequestHandler, this, fd));
   }
   else if (message->state() == TestMessage::FINISHREADING) {
-    std::cout << "Change to writing awating for " << fd << std::endl;
+    //std::cout << "Change to writing awating for " << fd << std::endl;
     //event_manger_.RemoveTaskWaitingReadable(fd);
     event_manger_.ModifyTaskWaitingStatus(fd, EPOLLOUT | EPOLLONESHOT,
         Base::NewCallBack(&SimpleServer::WriteRequestHandler, this, fd));
@@ -154,7 +154,7 @@ void SimpleServer::WriteRequestHandler(int fd) {
   int nwrite = write(fd, message->CharBuffer() + message->written_size(),
                          message->received_size() - message->written_size());
   if (nwrite < 0) {
-    //RemoveSession(fd);
+    RemoveSession(fd);
   }
   message->AddWrittenSize(nwrite);
 

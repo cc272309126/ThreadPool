@@ -46,7 +46,7 @@ void EventManager::EpollAwakeHandler(const Epoll::ActiveEvents* active_events) {
   for (auto i = 0; i < active_events->num(); i++) {
     int fd = active_events->events()[i].data.fd;
     if (inactive_tasks_map_.find(fd) != inactive_tasks_map_.end()) {
-      std::cout << "find task on fd " << fd << std::endl;
+      //std::cout << "find task on fd " << fd << std::endl;
       thread_pool_.AddTask(inactive_tasks_map_[fd]);
     }
   }
@@ -157,13 +157,11 @@ void Epoll::SetAwakeCallBack(EpollAwakeCallBack* cb) {
 int Epoll::AddMonitorReadableEvent(int fd) {
   // TODO: Are epoll_wait and epoll_ctl thread-safe?
   std::unique_lock<std::mutex> lock(mutex_);
-  std::cout << "epoll adding readable ..." << std::endl;
   return Add_Event(fd, EPOLLIN | EPOLLONESHOT);
 }
 
 int Epoll::AddMonitorWritableEvent(int fd) {
   std::unique_lock<std::mutex> lock(mutex_);
-  std::cout << "epoll adding writable ..." << std::endl;
   return Add_Event(fd, EPOLLOUT | EPOLLONESHOT);
 }
 
